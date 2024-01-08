@@ -1,0 +1,201 @@
+---
+title: "HW5_Q3"
+author: "QilinZhou"
+date: "2023-11-17"
+output: pdf_document
+---
+
+
+```{r}
+library(haven)
+library(dplyr)
+library(knitr)
+```
+
+```{r}
+setwd("/Users/qilinzhou/Desktop")
+data <- read_dta("asianwhiteMen.dta")
+```
+
+```{r}
+summary_stats <- data %>%
+  summarise(
+    Mean_age = mean(age, na.rm = TRUE),
+    Median_age = median(age, na.rm = TRUE),
+    Percent_Asian = mean(asian, na.rm = TRUE) * 100,
+    Mean_lnwage = mean(lwage, na.rm = TRUE),
+    Median_lnwage = median(lwage, na.rm = TRUE),
+    Percent_USBorn = mean(usborn, na.rm = TRUE) * 100
+  )
+kable(summary_stats, caption = "Summary Statistics of the Sample")
+```
+
+```{r}
+# Summary statistics for Asian men
+summary_asian_men <- data %>%
+  filter(asian == 1) %>%
+  summarise(
+    Mean_age = mean(age, na.rm = TRUE),
+    Mean_lnwage = mean(lwage, na.rm = TRUE),
+    Percent_USBorn = mean(usborn, na.rm = TRUE) * 100
+  )
+
+# Summary statistics for White men
+summary_white_men <- data %>%
+  filter(asian == 0) %>%
+  summarise(
+    Mean_age = mean(age, na.rm = TRUE),
+    Mean_lnwage = mean(lwage, na.rm = TRUE),
+    Percent_USBorn = mean(usborn, na.rm = TRUE) * 100
+  )
+
+# Tables
+kable(summary_asian_men, caption = "Summary Statistics of Asian Men in the Sample")
+kable(summary_white_men, caption = "Summary Statistics of White Men in the Sample")
+```
+```{r}
+library(stargazer)
+# Model 1: Control for age
+model1 <- lm(lwage ~ asian + age, data = data)
+
+# Model 2: Control for age and age squared
+model2 <- lm(lwage ~ asian + age + agesq, data = data)
+
+# Model 3: Fully saturated model
+data$age_factor <- factor(data$age)
+model3 <- lm(lwage ~ asian + age_factor, data = data)
+
+stargazer(model1, model2, type = "text")
+stargazer(model3, type = "text")
+```
+```{r}
+# Exact Matching on age
+# Calculate the number of Asians and Whites in each age group
+age_group_counts <- data %>%
+  group_by(age) %>%
+  summarise(
+    total = n(),
+    asian_count = sum(asian),
+    white_count = total - asian_count
+  )
+
+# Calculate p_hat (proportion of Asians) for each age group
+age_group_counts <- age_group_counts %>%
+  mutate(p_hat = asian_count / total)
+
+# Calculate IPW weights for treated (Asian) and untreated (White) units
+age_group_counts <- age_group_counts %>%
+  mutate(
+    weight_asian = ifelse(p_hat > 0, 1 / p_hat, 0),   # Avoid division by zero
+    weight_white = ifelse(p_hat < 1, 1 / (1 - p_hat), 1)
+  )
+
+# Add IPW weights to each individual 
+data_with_weights <- data %>%
+  left_join(age_group_counts, by = "age") %>%
+  mutate(
+    wt_ipw = ifelse(asian == 1, weight_asian, weight_white)
+  )
+```
+
+```{r}
+# Fit Models with calculated IPW weights
+# Model 0: with no controls
+model0_ipw <- lm(lwage ~ asian, data = data_with_weights, weights=wt_ipw)
+# Model 1: Control for age
+model1_ipw <- lm(lwage ~ asian + age, data = data_with_weights, weights=wt_ipw)
+
+# Model 2: Control for age and age squared
+model2_ipw <- lm(lwage ~ asian + age + agesq, data = data_with_weights, weights=wt_ipw)
+
+# Model 3: Fully saturated model
+model3_ipw <- lm(lwage ~ asian + age_factor, data = data_with_weights, weights=wt_ipw)
+
+stargazer(model0_ipw, type = "text")
+stargazer(model1_ipw, model2_ipw, type = "text")
+stargazer(model3_ipw, type = "text")
+```
+
+
+```{r}
+# Check if the proportion of Asians is between 0 and 1 for all age groups
+common_support <- all(age_group_counts$p_hat > 0 & age_group_counts$p_hat < 1)
+print(common_support)
+
+library(ggplot2)
+# Plotting the distribution of age for both groups
+ggplot(data, aes(x = age, fill = as.factor(asian))) +
+  geom_histogram(position = "dodge", binwidth = 1) +
+  labs(fill = "Group", x = "Age", y = "Count") +
+  ggtitle("Distribution of Age for Asian and White Groups")
+
+```
+
+```{r}
+
+setwd("/Users/qilinzhou/Desktop")
+data <- read_dta("asianwhiteMen.dta")
+
+# Filter data for only US-born samples
+usborn_data <- subset(data, usborn == 1)
+# Model 1: Control for age
+model1_us <- lm(lwage ~ asian + age, data = usborn_data)
+
+# Model 2: Control for age and age squared
+model2_us <- lm(lwage ~ asian + age + agesq, data = usborn_data)
+
+# Model 3: Fully saturated model
+usborn_data$age_factor <- factor(usborn_data$age)
+model3_us <- lm(lwage ~ asian + age_factor, data = usborn_data)
+
+stargazer(model1_us, model2_us, type = "text")
+stargazer(model3_us, type = "text")
+```
+
+```{r}
+# Exact Matching on age for USBorn
+# Calculate the number of Asians and Whites in each age group
+age_group_counts <- usborn_data %>%
+  group_by(age) %>%
+  summarise(
+    total = n(),
+    asian_count = sum(asian),
+    white_count = total - asian_count
+  )
+
+# Calculate p_hat (proportion of Asians) for each age group
+age_group_counts <- age_group_counts %>%
+  mutate(p_hat = asian_count / total)
+
+# Calculate IPW weights for treated (Asian) and untreated (White) units
+age_group_counts <- age_group_counts %>%
+  mutate(
+    weight_asian = ifelse(p_hat > 0, 1 / p_hat, 0),   # Avoid division by zero
+    weight_white = ifelse(p_hat < 1, 1 / (1 - p_hat), 1)
+  )
+
+# Add IPW weights to each individual 
+data_with_us_weights <- usborn_data %>%
+  left_join(age_group_counts, by = "age") %>%
+  mutate(
+    wt_ipw = ifelse(asian == 1, weight_asian, weight_white)
+  )
+```
+
+```{r}
+# Model 0: with no controls
+model0_us_ipw <- lm(lwage ~ asian, data = data_with_us_weights, weights=wt_ipw)
+# Model 1: Control for age
+model1_us_ipw <- lm(lwage ~ asian + age, data = data_with_us_weights, weights=wt_ipw)
+
+# Model 2: Control for age and age squared
+model2_us_ipw <- lm(lwage ~ asian + age + agesq, data = data_with_us_weights, weights=wt_ipw)
+
+# Model 3: Fully saturated model
+model3_us_ipw <- lm(lwage ~ asian + age_factor, data = data_with_us_weights, weights=wt_ipw)
+
+stargazer(model0_us_ipw, type = "text")
+stargazer(model1_us_ipw, model2_us_ipw, type = "text")
+stargazer(model3_us_ipw, type = "text")
+```
+
