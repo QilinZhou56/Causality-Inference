@@ -16,3 +16,8 @@ The codes are written in Stata or R.
 
 ## PSM dataset
 This data set is from the 2021 American Commu- nity Survey and contains wage data for Asian and white (non-Hispanic) men between the ages of 25 and 55 who have exactly a Bachelor’s degree, work at least 30 hours a week and at least 48 weeks per year.
+
+
+## Restrictions
+- **No Direct Copying**: The code in this repository should **not** be copied and pasted directly for any kind of academic submission or other purposes.
+- **Educational Use Only**: The content is intended solely for learning and reference.
